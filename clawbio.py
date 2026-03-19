@@ -439,6 +439,14 @@ SKILLS = {
             "--min-samples",
         },
     },
+    "trials": {
+        "script": SKILLS_DIR / "clinical-trial-finder" / "clinical_trial_finder.py",
+        "demo_args": ["--demo"],
+        "description": "Clinical trial finder — ClinicalTrials.gov API v2, FHIR R4 output",
+        "allowed_extra_flags": {"--gene", "--max-results", "--fhir", "--ot-min-score", "--ot-max-diseases"},
+        "no_input_required": True,   # --gene, --query, --demo supply their own input
+        "accepts_genotypes": False,
+    },
     "diffviz": {
         "script": SKILLS_DIR / "diff-visualizer" / "diff_visualizer.py",
         "demo_args": ["--demo"],

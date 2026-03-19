@@ -34,7 +34,7 @@ from clawbio.common.report import DISCLAIMER, write_result_json
 # ---------------------------------------------------------------------------
 
 VERSION = "0.1.0"
-ALL_SKILLS = ["pharmgx", "nutrigx", "prs", "compare"]
+ALL_SKILLS = ["pharmgx", "nutrigx", "prs", "compare", "trials"]
 
 # Cross-domain gene mapping: genes that appear in multiple skill contexts
 CROSS_DOMAIN_GENES = {
@@ -184,6 +184,19 @@ def render_executive_summary(profile: dict) -> str:
                 lines.append("- **Ancestry**: Results available")
     else:
         lines.append("- **Ancestry**: Not yet assessed")
+
+    # Clinical trials summary
+    trials_data = _get_nested(results, "trials", "data", "data")
+    if trials_data:
+        total = trials_data.get("total", 0)
+        recruiting = trials_data.get("recruiting", 0)
+        source_trait = trials_data.get("source_trait", "")
+        trait_str = f" for {source_trait}" if source_trait else ""
+        lines.append(
+            f"- **Clinical Trials**: {total} trials found{trait_str} · {recruiting} currently recruiting"
+        )
+    else:
+        lines.append("- **Clinical Trials**: Not yet assessed")
 
     lines.append("")
     return "\n".join(lines)
@@ -462,6 +475,80 @@ def render_ancestry_section(profile: dict) -> str:
     return "\n".join(lines)
 
 
+def render_trials_section(profile: dict) -> str:
+    """Render the clinical trials section from profile data.
+
+    Reads skill_results["trials"]["data"]["data"] — populated by running
+    `clawbio run trials --gene <GENE>` and storing the summary in the profile.
+    """
+    results = profile.get("skill_results", {})
+    trials_data = _get_nested(results, "trials", "data", "data")
+
+    if not trials_data:
+        return _missing_section(
+            "Clinical Trials",
+            "Run `clawbio.py run trials --gene <GENE>` to find trials relevant to your genomic risk profile.",
+        )
+
+    lines = ["## Clinical Trials", ""]
+
+    source_trait = trials_data.get("source_trait", "")
+    prs_percentile = trials_data.get("prs_percentile")
+    total = trials_data.get("total", 0)
+    recruiting = trials_data.get("recruiting", 0)
+
+    if source_trait and prs_percentile is not None:
+        lines.append(
+            f"> Trials identified based on elevated PRS risk for **{source_trait}** "
+            f"({prs_percentile:.0f}th percentile)."
+        )
+        lines.append("")
+    elif source_trait:
+        lines.append(f"> Trials identified for: **{source_trait}**.")
+        lines.append("")
+
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
+    lines.append(f"| Total trials found | {total} |")
+    lines.append(f"| Currently recruiting | {recruiting} |")
+    lines.append("")
+
+    trials = trials_data.get("trials", [])
+    recruiting_trials, other_trials = [], []
+    for t in trials:
+        (recruiting_trials if t.get("status") == "RECRUITING" else other_trials).append(t)
+
+    if recruiting_trials:
+        lines.append("### Actively Recruiting")
+        lines.append("")
+        for t in recruiting_trials[:5]:
+            nct = t["nct_id"]
+            url = f"https://clinicaltrials.gov/study/{nct}"
+            title = t["title"]
+            phase = t.get("phase", "N/A")
+            lines.append(f"- **[{title}]({url})**")
+            lines.append(f"  `{nct}` · {phase}")
+            interventions = t.get("interventions", [])
+            if interventions:
+                lines.append(f"  _{', '.join(interventions[:3])}_")
+        lines.append("")
+
+    if other_trials:
+        lines.append("### Other Relevant Trials")
+        lines.append("")
+        lines.append("| NCT ID | Title | Status | Phase |")
+        lines.append("|--------|-------|--------|-------|")
+        for t in other_trials[:5]:
+            nct = t["nct_id"]
+            title = t["title"][:55] + "…" if len(t["title"]) > 55 else t["title"]
+            status = t.get("status", "—").replace("_", " ").title()
+            phase = t.get("phase", "N/A")
+            lines.append(f"| [{nct}](https://clinicaltrials.gov/study/{nct}) | {title} | {status} | {phase} |")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Report assembler
 # ---------------------------------------------------------------------------
@@ -501,6 +588,7 @@ def generate_profile_report(profile: dict) -> str:
     lines.append(render_prs_section(profile))
     lines.append(render_nutrigx_section(profile))
     lines.append(render_ancestry_section(profile))
+    lines.append(render_trials_section(profile))
 
     # Methods and disclaimer
     lines.extend([
@@ -568,7 +656,10 @@ def build_demo_profile() -> dict:
     """
     demo_path = _SCRIPT_DIR / "demo_full_profile.json"
     if demo_path.exists():
-        return json.loads(demo_path.read_text())
+        profile = json.loads(demo_path.read_text())
+        if "trials" not in profile.get("skill_results", {}):
+            profile["skill_results"]["trials"] = _synthetic_trials()
+        return profile
 
     # Fallback: try DEMO001.json
     demo001 = _PROJECT_ROOT / "profiles" / "DEMO001.json"
@@ -579,6 +670,8 @@ def build_demo_profile() -> dict:
             profile["skill_results"]["prs"] = _synthetic_prs()
         if "compare" not in profile.get("skill_results", {}):
             profile["skill_results"]["compare"] = _synthetic_compare()
+        if "trials" not in profile.get("skill_results", {}):
+            profile["skill_results"]["trials"] = _synthetic_trials()
         return profile
 
     # Minimal fallback
@@ -706,6 +799,96 @@ def _synthetic_compare() -> dict:
     }
 
 
+def _synthetic_trials() -> dict:
+    """Generate synthetic clinical trials results for demo.
+
+    Reflects elevated AF risk (98th percentile) found in _synthetic_prs(),
+    showing the PRS → gene → trials pipeline in action.
+    """
+    return {
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "skill": "trials",
+            "version": "0.1.0",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "summary": {"total": 8, "recruiting": 3},
+            "data": {
+                "source_trait": "Atrial fibrillation",
+                "prs_percentile": 98,
+                "total": 8,
+                "recruiting": 3,
+                "trials": [
+                    {
+                        "nct_id": "NCT04994561",
+                        "title": "Anticoagulation Strategies for Patients with AF and CKD",
+                        "status": "RECRUITING",
+                        "phase": "Phase 3",
+                        "study_type": "INTERVENTIONAL",
+                        "start_date": "2022-03",
+                        "completion_date": "2026-06",
+                        "conditions": ["Atrial Fibrillation", "Chronic Kidney Disease"],
+                        "condition_meshes": [{"id": "D001281", "term": "Atrial Fibrillation"}],
+                        "interventions": ["Apixaban", "Warfarin"],
+                        "summary": "Comparing anticoagulation strategies in AF patients with CKD.",
+                    },
+                    {
+                        "nct_id": "NCT05166044",
+                        "title": "Rhythm Control vs Rate Control in Early Atrial Fibrillation",
+                        "status": "RECRUITING",
+                        "phase": "Phase 4",
+                        "study_type": "INTERVENTIONAL",
+                        "start_date": "2022-09",
+                        "completion_date": "2027-12",
+                        "conditions": ["Atrial Fibrillation"],
+                        "condition_meshes": [{"id": "D001281", "term": "Atrial Fibrillation"}],
+                        "interventions": ["Flecainide", "Rate control"],
+                        "summary": "Early rhythm control vs rate control in newly diagnosed AF.",
+                    },
+                    {
+                        "nct_id": "NCT04738266",
+                        "title": "AI-Guided Ablation for Persistent Atrial Fibrillation",
+                        "status": "RECRUITING",
+                        "phase": "Phase 2",
+                        "study_type": "INTERVENTIONAL",
+                        "start_date": "2021-06",
+                        "completion_date": "2025-12",
+                        "conditions": ["Atrial Fibrillation"],
+                        "condition_meshes": [{"id": "D001281", "term": "Atrial Fibrillation"}],
+                        "interventions": ["Catheter ablation"],
+                        "summary": "AI-guided catheter ablation for persistent AF.",
+                    },
+                    {
+                        "nct_id": "NCT04150887",
+                        "title": "Dronedarone vs Amiodarone in Long-Standing AF",
+                        "status": "COMPLETED",
+                        "phase": "Phase 3",
+                        "study_type": "INTERVENTIONAL",
+                        "start_date": "2020-01",
+                        "completion_date": "2024-03",
+                        "conditions": ["Atrial Fibrillation"],
+                        "condition_meshes": [{"id": "D001281", "term": "Atrial Fibrillation"}],
+                        "interventions": ["Dronedarone", "Amiodarone"],
+                        "summary": "Comparative efficacy of dronedarone vs amiodarone in long-standing AF.",
+                    },
+                    {
+                        "nct_id": "NCT03635892",
+                        "title": "Lifestyle Intervention for Atrial Fibrillation Risk Reduction",
+                        "status": "COMPLETED",
+                        "phase": "Phase 2",
+                        "study_type": "INTERVENTIONAL",
+                        "start_date": "2019-04",
+                        "completion_date": "2023-08",
+                        "conditions": ["Atrial Fibrillation"],
+                        "condition_meshes": [{"id": "D001281", "term": "Atrial Fibrillation"}],
+                        "interventions": ["Lifestyle modification", "Exercise program"],
+                        "summary": "Effect of intensive lifestyle intervention on AF burden.",
+                    },
+                ],
+            },
+        },
+    }
+
+
 def _minimal_demo_profile() -> dict:
     """Construct a minimal demo profile when no source files exist."""
     profile = {
@@ -721,6 +904,7 @@ def _minimal_demo_profile() -> dict:
     }
     profile["skill_results"]["prs"] = _synthetic_prs()
     profile["skill_results"]["compare"] = _synthetic_compare()
+    profile["skill_results"]["trials"] = _synthetic_trials()
     return profile
 
 

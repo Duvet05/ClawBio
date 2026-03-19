@@ -1,0 +1,4 @@
+# Demo query for clinical-trial-finder
+# This is NOT real patient data — synthetic search terms only
+# Searches for trials related to BRCA1 in breast cancer
+BRCA1 breast cancer
