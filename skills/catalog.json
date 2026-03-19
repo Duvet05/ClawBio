@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "generated_by": "scripts/generate_catalog.py",
-  "skill_count": 26,
+  "skill_count": 28,
   "galaxy_tool_count": 8182,
   "skills": [
     {
@@ -109,6 +109,27 @@
       "chaining_partners": [
         "equity-scorer"
       ]
+    },
+    {
+      "name": "clinical-trial-finder",
+      "cli_alias": null,
+      "description": "Find active clinical trials for a gene, condition, or drug from ClinicalTrials.gov API v2",
+      "version": "0.1.0",
+      "status": "planned",
+      "has_script": true,
+      "has_tests": true,
+      "has_demo": true,
+      "demo_command": "python skills/clinical-trial-finder/clinical_trial_finder.py --demo",
+      "dependencies": [],
+      "tags": [
+        "clinical-trials",
+        "genomics",
+        "drug-discovery",
+        "clinical",
+        "precision-medicine"
+      ],
+      "trigger_keywords": [],
+      "chaining_partners": []
     },
     {
       "name": "clinpgx",
@@ -401,7 +422,7 @@
     {
       "name": "nutrigx_advisor",
       "cli_alias": "nutrigx",
-      "description": "Personalised nutrigenomics report from consumer genetic data, with dietary and supplementation guidance generated locally.",
+      "description": "Personalised nutrition report from consumer genetic data (23andMe, AncestryDNA, VCF) — interrogates nutritionally-relevant SNPs and generates actionable dietary guidance, all computed locally.",
       "version": "0.1.0",
       "status": "mvp",
       "has_script": true,
