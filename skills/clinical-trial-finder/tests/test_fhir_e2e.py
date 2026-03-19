@@ -25,17 +25,20 @@ def _load(name: str):
     return mod
 
 
+const = _load("constants")
+api = _load("api")
+wr = _load("writers")
 ctf = _load("clinical_trial_finder")
 
 # FHIR R4 dateTime regex — accepts YYYY, YYYY-MM, YYYY-MM-DD, or full datetime
 # Source: https://hl7.org/fhir/R4/datatypes.html#dateTime
 FHIR_DATETIME_RE = re.compile(
-    r"^([0-9]{4})"                           # YYYY
-    r"(-(0[1-9]|1[0-2])"                     # -MM
-    r"(-(0[1-9]|[12][0-9]|3[01])"            # -DD
-    r"(T([01][0-9]|2[0-3]):[0-5][0-9]"       # Thh:mm
-    r"(:[0-5][0-9](\.[0-9]+)?)?"             # :ss.sss
-    r"(Z|[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00))?" # timezone
+    r"^([0-9]{4})"  # YYYY
+    r"(-(0[1-9]|1[0-2])"  # -MM
+    r"(-(0[1-9]|[12][0-9]|3[01])"  # -DD
+    r"(T([01][0-9]|2[0-3]):[0-5][0-9]"  # Thh:mm
+    r"(:[0-5][0-9](\.[0-9]+)?)?"  # :ss.sss
+    r"(Z|[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00))?"  # timezone
     r")?)?)?$"
 )
 
@@ -48,9 +51,14 @@ FHIR_INSTANT_RE = re.compile(
 
 # Valid ResearchStudy.status codes (FHIR R4)
 VALID_STATUSES = {
-    "active", "administratively-completed", "approved",
-    "closed-to-accrual", "closed-to-accrual-and-intervention",
-    "completed", "disapproved", "in-review",
+    "active",
+    "administratively-completed",
+    "approved",
+    "closed-to-accrual",
+    "closed-to-accrual-and-intervention",
+    "completed",
+    "disapproved",
+    "in-review",
     "temporarily-closed-to-accrual",
     "temporarily-closed-to-accrual-and-intervention",
     "withdrawn",
@@ -58,8 +66,14 @@ VALID_STATUSES = {
 
 # Valid ResearchStudy.phase codes (FHIR R4)
 VALID_PHASES = {
-    "n-a", "early-phase-1", "phase-1", "phase-1-phase-2",
-    "phase-2", "phase-2-phase-3", "phase-3", "phase-4",
+    "n-a",
+    "early-phase-1",
+    "phase-1",
+    "phase-1-phase-2",
+    "phase-2",
+    "phase-2-phase-3",
+    "phase-3",
+    "phase-4",
 }
 
 PHASE_SYSTEM = "http://terminology.hl7.org/CodeSystem/research-study-phase"
@@ -69,14 +83,15 @@ PHASE_SYSTEM = "http://terminology.hl7.org/CodeSystem/research-study-phase"
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def fhir_bundle(tmp_path_factory):
     """Fetch real trials and generate FHIR bundle (runs once per module)."""
-    trials = ctf.fetch_trials("BRCA1 breast cancer", max_results=10)
+    trials = api.fetch_trials("BRCA1 breast cancer", max_results=10)
     if not trials:
         pytest.skip("ClinicalTrials.gov returned 0 results — network issue?")
     out = tmp_path_factory.mktemp("fhir_e2e")
-    path = ctf.write_fhir_bundle(trials, out)
+    path = wr.write_fhir_bundle(trials, out)
     return json.loads(path.read_text())
 
 
@@ -88,6 +103,7 @@ def resources(fhir_bundle):
 # ---------------------------------------------------------------------------
 # Bundle-level validation
 # ---------------------------------------------------------------------------
+
 
 class TestBundleStructure:
     def test_resource_type(self, fhir_bundle):
@@ -117,6 +133,7 @@ class TestBundleStructure:
 # ResearchStudy resource validation
 # ---------------------------------------------------------------------------
 
+
 class TestResearchStudyResource:
     def test_resource_type(self, resources):
         for r in resources:
@@ -145,19 +162,20 @@ class TestResearchStudyResource:
 # FHIR status code validation
 # ---------------------------------------------------------------------------
 
+
 class TestFHIRStatus:
     def test_status_is_valid_code(self, resources):
         for r in resources:
             status = r.get("status")
-            assert status in VALID_STATUSES or status == "unknown", (
+            assert status in VALID_STATUSES, (
                 f"{r['id']}: status '{status}' is not a valid FHIR "
                 f"research-study-status code. Valid: {VALID_STATUSES}"
             )
 
     def test_all_ct_statuses_mapped(self):
         """Every ClinicalTrials.gov status must map to a valid FHIR code."""
-        for ct_status, fhir_code in ctf.FHIR_STATUS.items():
-            assert fhir_code in VALID_STATUSES or fhir_code == "unknown", (
+        for ct_status, fhir_code in const.FHIR_STATUS.items():
+            assert fhir_code in VALID_STATUSES, (
                 f"FHIR_STATUS['{ct_status}'] = '{fhir_code}' is not valid"
             )
 
@@ -165,6 +183,7 @@ class TestFHIRStatus:
 # ---------------------------------------------------------------------------
 # FHIR phase CodeableConcept validation
 # ---------------------------------------------------------------------------
+
 
 class TestFHIRPhase:
     def test_phase_is_codeable_concept(self, resources):
@@ -193,12 +212,17 @@ class TestFHIRPhase:
                     f"FHIR value set. Valid: {VALID_PHASES}"
                 )
 
-    def test_phase_coding_has_display(self, resources):
-        """FHIR best practice: Coding should include display for readability."""
+    def test_phase_coding_has_display_when_known(self, resources):
+        """FHIR best practice: Coding should include display when phase is known.
+
+        Phases with no display (e.g. OBSERVATIONAL studies with no phase)
+        correctly omit the field -- FHIR R4 forbids empty strings.
+        """
         missing = []
         for r in resources:
             for coding in r["phase"]["coding"]:
-                if "display" not in coding:
+                code = coding.get("code", "")
+                if code != "n-a" and "display" not in coding:
                     missing.append(r["id"])
         if missing:
             pytest.fail(
@@ -210,6 +234,7 @@ class TestFHIRPhase:
 # ---------------------------------------------------------------------------
 # FHIR Period (dateTime) validation
 # ---------------------------------------------------------------------------
+
 
 class TestFHIRPeriod:
     def test_period_dates_are_valid_fhir_datetime(self, resources):
@@ -242,6 +267,7 @@ class TestFHIRPeriod:
 # ---------------------------------------------------------------------------
 # FHIR condition CodeableConcept validation
 # ---------------------------------------------------------------------------
+
 
 class TestFHIRCondition:
     def test_condition_is_codeable_concept_list(self, resources):
@@ -284,6 +310,7 @@ class TestFHIRCondition:
 # ---------------------------------------------------------------------------
 # Data completeness — available data should not be silently dropped
 # ---------------------------------------------------------------------------
+
 
 class TestDataCompleteness:
     def test_study_type_mapped_to_category(self, resources):

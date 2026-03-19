@@ -17,13 +17,13 @@ from typing import NamedTuple
 
 OT_GRAPHQL = "https://api.platform.opentargets.org/api/v4/graphql"
 
-DEFAULT_MIN_SCORE   = 0.6
+DEFAULT_MIN_SCORE = 0.6
 DEFAULT_MAX_DISEASES = 5
 
 
 class Disease(NamedTuple):
-    id:    str
-    name:  str
+    id: str
+    name: str
     score: float
 
 
