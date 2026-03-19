@@ -458,7 +458,7 @@ def write_html(
             if t.get("source")
             else ""
         )
-        phase_label = _html.escape(t["phase"] or "N/A")
+        phase_label = _esc(PHASE_DISPLAY.get(t["phase"], t["phase"] or "N/A"))
         cards.append(f"""
         <div class="trial-card" data-status="{_esc(t["status"])}" data-phase="{
             phase_label
@@ -533,7 +533,7 @@ def write_html(
     </select>
     <select id="phaseFilter" onchange="filterTrials()">
       <option value="">All phases</option>
-      {"".join(f'<option value="{_esc(p)}">{_esc(p)}</option>' for p in sorted({t["phase"] or "N/A" for t in trials}))}
+      {"".join(f'<option value="{_esc(p)}">{_esc(p)}</option>' for p in sorted({PHASE_DISPLAY.get(t["phase"], t["phase"] or "N/A") for t in trials}))}
     </select>
     <span class="filter-count" id="filterCount">{len(trials)} trials</span>
   </div>
