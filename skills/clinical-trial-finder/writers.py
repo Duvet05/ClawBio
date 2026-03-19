@@ -435,7 +435,9 @@ def write_html(
         "WITHDRAWN": "#7f8c8d",
         "ACTIVE_NOT_RECRUITING": "#f1c40f",
         "NOT_YET_RECRUITING": "#3498db",
+        "ENROLLING_BY_INVITATION": "#27ae60",
         "SUSPENDED": "#e67e22",
+        "APPROVED_FOR_MARKETING": "#8e44ad",
         "UNKNOWN": "#bdc3c7",
     }
 
@@ -650,6 +652,8 @@ def write_commands(args: argparse.Namespace, output_dir: Path) -> Path:
         parts.append(f"--query {_sq(args.query)}")
     elif args.gene:
         parts.append(f"--gene {_sq(args.gene)}")
+    elif getattr(args, "rsid", None):
+        parts.append(f"--rsid {_sq(args.rsid)}")
 
     # Optional filters and flags -- only if non-default
     if args.status:
