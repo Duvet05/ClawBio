@@ -72,7 +72,7 @@ def write_report(
     recruiting = count_recruiting(trials)
     phases = sorted({t["phase"] for t in trials if t["phase"]})
     study_types = sorted({t["study_type"] for t in trials if t["study_type"]})
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     lines = ["# Clinical Trial Finder Report", ""]
 
@@ -156,7 +156,7 @@ def write_summary(query_info: dict, trials: list[dict], output_dir: Path) -> Pat
     """
     payload = {
         "query": query_info["query"],
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "source": "clinicaltrials.gov/api/v2",
         "total": len(trials),
         "recruiting": count_recruiting(trials),
@@ -425,7 +425,7 @@ def write_html(
     opens correctly from any file manager or browser.
     """
     recruiting = count_recruiting(trials)
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     # Duplicated from STATUS_COLOR because HTML needs inline styles (no imports)
     _STATUS_CSS = {
@@ -644,6 +644,7 @@ def write_checksums(output_dir: Path) -> Path:
         "report.html",
         "tables/trials.csv",
         "figures/phase_distribution.png",
+        "commands.sh",
     ]
     lines = []
     for rel in targets:

@@ -602,7 +602,7 @@ def test_write_commands_query_with_status(tmp_path):
     )
     path = wr.write_commands(args, tmp_path)
     content = path.read_text()
-    assert '--query "lung cancer"' in content
+    assert "--query 'lung cancer'" in content
     assert "--status RECRUITING" in content
     assert "--fhir" in content
 
@@ -621,7 +621,7 @@ def test_write_commands_non_default_ot_params(tmp_path):
     )
     path = wr.write_commands(args, tmp_path)
     content = path.read_text()
-    assert "--gene BRCA1" in content
+    assert "--gene 'BRCA1'" in content
     assert "--max-results 50" in content
     assert "--ot-min-score 0.3" in content
     assert "--ot-max-diseases 10" in content
@@ -971,7 +971,7 @@ def test_write_commands_with_input_path(tmp_path):
     )
     path = wr.write_commands(args, tmp_path)
     content = path.read_text()
-    assert "--input /data/queries.txt" in content
+    assert "--input '/data/queries.txt'" in content
     assert "--demo" not in content
 
 
@@ -1373,7 +1373,7 @@ def test_write_commands_with_country(tmp_path):
         ot_max_diseases=5,
     )
     path = wr.write_commands(args, tmp_path)
-    assert '--country "Spain"' in path.read_text()
+    assert "--country 'Spain'" in path.read_text()
 
 
 def test_write_commands_with_euctr(tmp_path):

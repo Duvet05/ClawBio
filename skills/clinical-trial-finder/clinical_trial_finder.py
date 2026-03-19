@@ -32,9 +32,10 @@ from writers import (
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build argparse parser with 4 mutually exclusive input modes.
+    """Build argparse parser with 5 mutually exclusive input modes.
 
-    Modes: --input (file), --query (string), --gene (OpenTargets), --demo.
+    Modes: --input (file), --query (string), --gene (OpenTargets),
+           --rsid (gwas-lookup), --demo.
     """
     p = argparse.ArgumentParser(
         description="Clinical Trial Finder -- ClinicalTrials.gov API v2 + OpenTargets"
@@ -46,6 +47,11 @@ def _build_parser() -> argparse.ArgumentParser:
     src.add_argument("--query", type=str, help="Direct search query string")
     src.add_argument(
         "--gene", type=str, help="Gene symbol (e.g. BRCA1) -- enriched via OpenTargets"
+    )
+    src.add_argument(
+        "--rsid",
+        type=str,
+        help="rsID (e.g. rs3798220) -- resolves via gwas-lookup to traits + genes",
     )
     src.add_argument(
         "--demo", action="store_true", help="Run with built-in demo data (BRCA1)"
@@ -170,12 +176,54 @@ def main() -> None:
         recruiting = count_recruiting(trials)
         print(f"  Found {len(trials)} unique trials ({recruiting} recruiting)")
 
+    elif args.rsid:
+        # rsID mode: call gwas-lookup to resolve variant -> traits + genes,
+        # then query CT.gov for each trait.  Connects the pipeline:
+        # variant -> GWAS trait -> clinical trials
+        import gwas_bridge
+
+        rsid = args.rsid.lower()
+        print(f"Resolving {rsid!r} via gwas-lookup...")
+        try:
+            gwas_result = gwas_bridge.resolve_rsid(rsid)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+
+        traits = gwas_result["traits"]
+        genes = gwas_result["genes"]
+        print(f"  {rsid} -> {len(traits)} traits: {', '.join(traits)}")
+        if genes:
+            print(f"  eQTL genes: {', '.join(genes[:5])}")
+
+        # Query CT.gov for each trait, deduplicate by NCT ID
+        per_trait = max(1, args.max_results // max(len(traits), 1))
+        seen: set[str] = set()
+        trials = []
+        for trait in traits:
+            print(f"  Querying trials for: {trait!r}")
+            for t in fetch_trials(
+                trait, max_results=per_trait, country=args.country
+            ):
+                if t["nct_id"] not in seen:
+                    seen.add(t["nct_id"])
+                    trials.append(t)
+
+        query_info = {"query": rsid, "terms": traits}
+        gene_context = {
+            "symbol": rsid,
+            "name": f"GWAS variant ({', '.join(genes[:3])})" if genes else "GWAS variant",
+            "diseases": traits,
+            "min_score": 0.0,
+        }
+        recruiting = count_recruiting(trials)
+        print(f"  Found {len(trials)} unique trials ({recruiting} recruiting)")
+
     else:
-        _build_parser().error("Provide --input, --query, --gene, or --demo")
+        _build_parser().error("Provide --input, --query, --gene, --rsid, or --demo")
 
-    # --- Fetch trials (non-gene modes) ---
+    # --- Fetch trials (non-gene/non-rsid modes) ---
 
-    if not args.gene:
+    if not args.gene and not args.rsid:
         country_msg = f" in {args.country}" if args.country else ""
         print(f"Querying ClinicalTrials.gov: {query_info['query']!r}{country_msg}")
         trials = fetch_trials(
