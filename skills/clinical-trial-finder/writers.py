@@ -456,8 +456,10 @@ def write_html(
             if t.get("source")
             else ""
         )
+        phase_label = _html.escape(t["phase"] or "N/A")
         cards.append(f"""
-        <div style="border-left:4px solid {color};padding:12px 16px;margin:8px 0;
+        <div class="trial-card" data-status="{_esc(t['status'])}" data-phase="{phase_label}"
+             style="border-left:4px solid {color};padding:12px 16px;margin:8px 0;
                     background:#fafafa;border-radius:0 4px 4px 0">
           <div style="font-weight:bold">
             <span style="background:{
@@ -495,6 +497,14 @@ def write_html(
     th {{ background: #f5f5f5; }}
     .disclaimer {{ background: #fff3cd; padding: 12px; border-radius: 4px;
                    margin-top: 24px; font-size: 0.9em; }}
+    .filters {{ background: #f0f4f8; padding: 12px 16px; border-radius: 6px;
+               margin: 16px 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }}
+    .filters input, .filters select {{ padding: 6px 10px; border: 1px solid #ccc;
+               border-radius: 4px; font-size: 0.9em; }}
+    .filters input {{ flex: 1; min-width: 200px; }}
+    .filter-count {{ font-size: 0.85em; color: #666; margin-left: auto; }}
+    .trial-card {{ transition: opacity 0.15s; }}
+    .trial-card.hidden {{ display: none; }}
   </style>
 </head>
 <body>
@@ -510,7 +520,40 @@ def write_html(
   </table>
 
   <h2>Trials</h2>
+
+  <div class="filters">
+    <input type="text" id="searchBox" placeholder="Search trials..." oninput="filterTrials()">
+    <select id="statusFilter" onchange="filterTrials()">
+      <option value="">All statuses</option>
+      {"".join(f'<option value="{_esc(s)}">{_esc(s)}</option>' for s in sorted({t["status"] for t in trials}))}
+    </select>
+    <select id="phaseFilter" onchange="filterTrials()">
+      <option value="">All phases</option>
+      {"".join(f'<option value="{_esc(p)}">{_esc(p)}</option>' for p in sorted({t["phase"] or "N/A" for t in trials}))}
+    </select>
+    <span class="filter-count" id="filterCount">{len(trials)} trials</span>
+  </div>
+
   {"".join(cards)}
+
+  <script>
+  function filterTrials() {{
+    const search = document.getElementById('searchBox').value.toLowerCase();
+    const status = document.getElementById('statusFilter').value;
+    const phase = document.getElementById('phaseFilter').value;
+    let visible = 0;
+    document.querySelectorAll('.trial-card').forEach(card => {{
+      const text = card.textContent.toLowerCase();
+      const matchSearch = !search || text.includes(search);
+      const matchStatus = !status || card.dataset.status === status;
+      const matchPhase = !phase || card.dataset.phase === phase;
+      const show = matchSearch && matchStatus && matchPhase;
+      card.classList.toggle('hidden', !show);
+      if (show) visible++;
+    }});
+    document.getElementById('filterCount').textContent = visible + ' of {len(trials)} trials';
+  }}
+  </script>
 
   <div class="disclaimer">{DISCLAIMER.replace("*", "")}</div>
   <p style="color:#999;font-size:0.8em;margin-top:24px">
