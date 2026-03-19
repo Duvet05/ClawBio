@@ -326,9 +326,12 @@ def write_phase_chart(
     present_statuses = {s for p in phases for s in phase_status[p]}
     all_statuses = [s for s in STATUS_COLOR if s in present_statuses]
 
+    # Width scales with phase count (1.4in per bar, min 7in for readability)
     fig, ax = plt.subplots(figsize=(max(7, len(phases) * 1.4), 5))
+    # bottoms tracks cumulative height per bar for stacking
     bottoms = [0] * len(phases)
 
+    # Each status becomes a layer in the stacked bar
     for status in all_statuses:
         counts = [phase_status[p].get(status, 0) for p in phases]
         ax.bar(
@@ -342,7 +345,7 @@ def write_phase_chart(
         )
         bottoms = [b + c for b, c in zip(bottoms, counts)]
 
-    # Total labels on top -- proportional offset so they scale with data
+    # Total labels on top -- 2% proportional offset avoids overlap at any scale
     for i, total in enumerate(bottoms):
         if total:
             ax.text(
@@ -423,6 +426,7 @@ def write_html(
     recruiting = count_recruiting(trials)
     timestamp = datetime.now().isoformat(timespec="seconds")
 
+    # Duplicated from STATUS_COLOR because HTML needs inline styles (no imports)
     _STATUS_CSS = {
         "RECRUITING": "#2ecc71",
         "COMPLETED": "#95a5a6",

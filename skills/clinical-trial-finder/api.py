@@ -197,6 +197,7 @@ def _normalise_trial(study: dict) -> dict:
         "nct_id": id_mod.get("nctId", ""),
         "title": id_mod.get("briefTitle", ""),
         "status": status_mod.get("overallStatus", "UNKNOWN"),
+        # CT.gov returns phases as a list, e.g. ["PHASE1", "PHASE2"] -> "PHASE1 / PHASE2"
         "phase": " / ".join(design_mod.get("phases", [])),
         "study_type": design_mod.get("studyType", ""),
         "start_date": _to_fhir_date(
@@ -208,6 +209,7 @@ def _normalise_trial(study: dict) -> dict:
         "conditions": cond_mod.get("conditions", []),
         "condition_meshes": condition_meshes,
         "interventions": interventions,
-        # Truncate long summaries to keep the report scannable.
+        # CT.gov summaries can exceed 2000 chars; truncate for the report while
+        # summary.json preserves the full text via the raw API response.
         "summary": summary[:300] + "..." if len(summary) > 300 else summary,
     }

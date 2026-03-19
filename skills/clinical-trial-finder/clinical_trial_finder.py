@@ -32,6 +32,10 @@ from writers import (
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Build argparse parser with 4 mutually exclusive input modes.
+
+    Modes: --input (file), --query (string), --gene (OpenTargets), --demo.
+    """
     p = argparse.ArgumentParser(
         description="Clinical Trial Finder -- ClinicalTrials.gov API v2 + OpenTargets"
     )
@@ -94,6 +98,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Entry point: resolve input mode, fetch trials, write all outputs."""
     args = _build_parser().parse_args()
 
     gene_context: dict | None = None

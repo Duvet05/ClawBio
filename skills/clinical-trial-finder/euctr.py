@@ -67,9 +67,12 @@ def _parse_euctr_response(raw: str, max_results: int) -> list[dict]:
     except ET.ParseError:
         pass
 
-    # Fallback: extract EudraCT numbers from raw text
+    # Fallback: regex extraction from raw HTML.  We use regex instead of an
+    # HTML parser because EUCTR responses are inconsistent and often malformed;
+    # a proper parser would fail more often than a targeted regex.
     import re
 
+    # EudraCT IDs follow format YYYY-NNNNNN-CC (year, 6-digit seq, 2-digit check)
     eudract_pattern = re.compile(r"(\d{4}-\d{6}-\d{2})")
     title_pattern = re.compile(r"<td[^>]*class=\"full\"[^>]*>([^<]+)</td>")
 
@@ -98,7 +101,12 @@ def _parse_euctr_response(raw: str, max_results: int) -> list[dict]:
 
 
 def _euctr_element_to_dict(el: ET.Element) -> dict:
-    """Convert a single EUCTR XML <trial> element to a normalised dict."""
+    """Convert a single EUCTR XML <trial> element to a normalised dict.
+
+    Output schema matches api._normalise_trial() so CT.gov and EUCTR trials
+    can be merged in a single list.  Fields not available in EUCTR (e.g.
+    condition_meshes, completion_date) default to empty values.
+    """
 
     def _text(tag: str) -> str:
         child = el.find(tag)

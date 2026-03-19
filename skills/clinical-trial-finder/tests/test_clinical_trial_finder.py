@@ -35,6 +35,10 @@ ot = _load("opentargets")
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# Three trials covering the key scenarios:
+#   A: RECRUITING, PHASE2, has MeSH coding, has interventions (happy path)
+#   B: COMPLETED, PHASE3, no MeSH (text fallback), no interventions
+#   C: TERMINATED, no phase, OBSERVATIONAL, all fields empty (edge case)
 MOCK_TRIALS = [
     {
         "nct_id": "NCT00000001",
