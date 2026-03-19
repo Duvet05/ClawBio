@@ -8,6 +8,7 @@ an output directory, creates the file, and returns its Path.
 import argparse
 import csv
 import hashlib
+import html as _html
 import json
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -438,19 +439,20 @@ def write_html(
         "UNKNOWN": "#bdc3c7",
     }
 
+    _esc = _html.escape
     header = (
-        f"<strong>Gene:</strong> {gene_context.get('symbol', '?')} -- {gene_context.get('name', '')}"
+        f"<strong>Gene:</strong> {_esc(gene_context.get('symbol', '?'))} -- {_esc(gene_context.get('name', ''))}"
         if gene_context
-        else f"<strong>Query:</strong> {query_info['query']}"
+        else f"<strong>Query:</strong> {_esc(query_info['query'])}"
     )
 
     cards = []
     for t in trials:
         color = _STATUS_CSS.get(t["status"], "#bdc3c7")
-        nct_url = f"https://clinicaltrials.gov/study/{t['nct_id']}"
+        nct_url = f"https://clinicaltrials.gov/study/{_esc(t['nct_id'])}"
         source_badge = (
             f' <span style="background:#e8daef;padding:2px 6px;border-radius:3px;font-size:0.75em">'
-            f"{t.get('source', 'ctgov').upper()}</span>"
+            f"{_esc(t.get('source', 'ctgov').upper())}</span>"
             if t.get("source")
             else ""
         )
@@ -461,17 +463,17 @@ def write_html(
             <span style="background:{
             color
         };color:white;padding:2px 8px;border-radius:3px;
-                         font-size:0.8em;margin-right:8px">{t["status"]}</span>
-            <a href="{nct_url}" target="_blank">{t["title"]}</a>{source_badge}
+                         font-size:0.8em;margin-right:8px">{_esc(t["status"])}</span>
+            <a href="{nct_url}" target="_blank">{_esc(t["title"])}</a>{source_badge}
           </div>
           <div style="margin-top:6px;color:#555;font-size:0.9em">
-            {t["nct_id"]} | Phase: {t["phase"] or "N/A"} |
-            {t["start_date"] or "?"} -- {t["completion_date"] or "?"}
+            {_esc(t["nct_id"])} | Phase: {_esc(t["phase"] or "N/A")} |
+            {_esc(t["start_date"] or "?")} -- {_esc(t["completion_date"] or "?")}
           </div>
           {
             (
                 '<div style="margin-top:4px;font-size:0.85em;color:#777">'
-                + ", ".join(t["conditions"][:3])
+                + ", ".join(_esc(c) for c in t["conditions"][:3])
                 + "</div>"
             )
             if t.get("conditions")
@@ -592,21 +594,25 @@ def write_commands(args: argparse.Namespace, output_dir: Path) -> Path:
     """
     parts = ["python skills/clinical-trial-finder/clinical_trial_finder.py"]
 
+    def _sq(val: str) -> str:
+        """Shell-quote a value using single quotes (handles spaces and special chars)."""
+        return "'" + str(val).replace("'", "'\\''") + "'"
+
     # Source mode -- mutually exclusive
     if args.demo:
         parts.append("--demo")
     elif args.input:
-        parts.append(f"--input {args.input}")
+        parts.append(f"--input {_sq(args.input)}")
     elif args.query:
-        parts.append(f'--query "{args.query}"')
+        parts.append(f"--query {_sq(args.query)}")
     elif args.gene:
-        parts.append(f"--gene {args.gene}")
+        parts.append(f"--gene {_sq(args.gene)}")
 
     # Optional filters and flags -- only if non-default
     if args.status:
         parts.append(f"--status {args.status}")
     if getattr(args, "country", None):
-        parts.append(f'--country "{args.country}"')
+        parts.append(f"--country {_sq(args.country)}")
     if args.max_results != DEFAULT_PAGE_SIZE:
         parts.append(f"--max-results {args.max_results}")
     if args.fhir:

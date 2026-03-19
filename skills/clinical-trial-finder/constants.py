@@ -65,10 +65,12 @@ ALL_STATUSES = [
     "RECRUITING",
     "ACTIVE_NOT_RECRUITING",
     "NOT_YET_RECRUITING",
+    "ENROLLING_BY_INVITATION",
     "COMPLETED",
     "TERMINATED",
     "WITHDRAWN",
     "SUSPENDED",
+    "APPROVED_FOR_MARKETING",
     "UNKNOWN",
 ]
 
@@ -80,9 +82,11 @@ STATUS_LABEL: dict[str, str] = {
     "ACTIVE_NOT_RECRUITING": "[ACTIVE]",
     "COMPLETED": "[COMPLETED]",
     "NOT_YET_RECRUITING": "[PENDING]",
+    "ENROLLING_BY_INVITATION": "[BY INVITATION]",
     "TERMINATED": "[TERMINATED]",
     "WITHDRAWN": "[WITHDRAWN]",
     "SUSPENDED": "[SUSPENDED]",
+    "APPROVED_FOR_MARKETING": "[APPROVED]",
     "UNKNOWN": "[UNKNOWN]",
 }
 
@@ -98,10 +102,12 @@ FHIR_STATUS: dict[str, str] = {
     "RECRUITING": "active",
     "ACTIVE_NOT_RECRUITING": "active",
     "NOT_YET_RECRUITING": "approved",
+    "ENROLLING_BY_INVITATION": "active",
     "COMPLETED": "completed",
     "TERMINATED": "administratively-completed",
     "WITHDRAWN": "withdrawn",
     "SUSPENDED": "temporarily-closed-to-accrual",
+    "APPROVED_FOR_MARKETING": "completed",
     "UNKNOWN": "unknown",
 }
 
@@ -169,16 +175,19 @@ PHASE_DISPLAY: dict[str, str] = {
 STATUS_COLOR: dict[str, str] = {
     "RECRUITING": "#2ecc71",
     "NOT_YET_RECRUITING": "#3498db",
+    "ENROLLING_BY_INVITATION": "#27ae60",
     "ACTIVE_NOT_RECRUITING": "#f1c40f",
     "SUSPENDED": "#e67e22",
     "TERMINATED": "#e74c3c",
     "WITHDRAWN": "#7f8c8d",
     "COMPLETED": "#95a5a6",
+    "APPROVED_FOR_MARKETING": "#8e44ad",
     "UNKNOWN": "#bdc3c7",
 }
 
 # Fixed order so phases always appear left-to-right by progression.
 PHASE_ORDER = [
+    "Early Phase 1",
     "Phase 1",
     "Phase 1/2",
     "Phase 2",
