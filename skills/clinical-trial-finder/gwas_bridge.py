@@ -1,90 +1,137 @@
-"""Bridge to gwas-lookup skill -- resolves rsID to traits and genes.
+"""Bridge to GWAS Catalog -- resolves rsID to disease traits for trial search.
 
-Calls gwas-lookup via clawbio.py (which handles import paths correctly)
-as a subprocess.  Extracts genome-wide significant GWAS traits and eQTL
-gene symbols, deduplicates, and returns them for CT.gov queries.
+Queries the EBI GWAS Catalog REST API directly (free, no auth) to extract
+genome-wide significant trait associations for a variant.  This is lighter
+than calling the full gwas-lookup skill and avoids its import-path issues.
+
+If gwas-lookup's result.json already exists (e.g. from a prior run), we
+read that instead of re-querying.
 """
 
 import json
-import subprocess
-import sys
-import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
-_CLAWBIO_DIR = Path(__file__).resolve().parent.parent.parent
-_CLAWBIO_PY = _CLAWBIO_DIR / "clawbio.py"
-_GWAS_SCRIPT = _CLAWBIO_DIR / "skills" / "gwas-lookup" / "gwas_lookup.py"
+_GWAS_API = "https://www.ebi.ac.uk/gwas/rest/api"
+
+# gwas-lookup output directory (if available from a prior run)
+_GWAS_LOOKUP_DIR = Path(__file__).resolve().parent.parent / "gwas-lookup"
 
 
 def resolve_rsid(rsid: str, max_traits: int = 5) -> dict:
-    """Resolve an rsID via gwas-lookup and return associated traits and genes.
+    """Resolve an rsID to associated disease traits via the GWAS Catalog.
 
-    Routes through clawbio.py to handle import paths correctly.
     Returns dict with keys: rsid, traits (list[str]), genes (list[str]).
-    Raises ValueError if gwas-lookup fails or returns no associations.
+    Raises ValueError if the API fails or returns no associations.
     """
-    if not _GWAS_SCRIPT.exists():
+    # Try reading cached gwas-lookup result first
+    cached = _try_cached_result(rsid)
+    if cached:
+        return cached
+
+    # Query GWAS Catalog REST API directly
+    return _query_gwas_catalog(rsid, max_traits)
+
+
+def _try_cached_result(rsid: str) -> dict | None:
+    """Check if gwas-lookup has a cached result.json we can reuse."""
+    for candidate in [
+        _GWAS_LOOKUP_DIR / "data" / f"demo_{rsid}.json",
+        Path(f"/tmp/gwas_lookup_{rsid}") / "result.json",
+    ]:
+        if candidate.exists():
+            try:
+                data = json.loads(candidate.read_text())
+                merged = data.get("data", {}).get("merged", {})
+                if merged:
+                    return _extract_traits_and_genes(rsid, merged, 5)
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return None
+
+
+def _query_gwas_catalog(rsid: str, max_traits: int) -> dict:
+    """Query EBI GWAS Catalog API for variant-trait associations."""
+    # projection=associationBySnp embeds efoTraits inline (default omits them)
+    url = f"{_GWAS_API}/singleNucleotidePolymorphisms/{rsid}/associations?projection=associationBySnp"
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise ValueError(f"Variant {rsid} not found in GWAS Catalog") from None
+        raise ValueError(f"GWAS Catalog API error: HTTP {e.code}") from None
+    except (urllib.error.URLError, OSError) as e:
+        raise ValueError(f"GWAS Catalog API unreachable: {e}") from None
+
+    # Extract traits and genes from associations
+    trait_pvals: dict[str, float] = {}
+    genes: list[str] = []
+    seen_genes: set[str] = set()
+
+    for assoc in data.get("_embedded", {}).get("associations", []):
+        pval = assoc.get("pvalue", 1.0)
+        if isinstance(pval, str):
+            try:
+                pval = float(pval)
+            except ValueError:
+                continue
+
+        # Extract trait names
+        for trait in assoc.get("efoTraits", []):
+            name = trait.get("trait", "").strip()
+            if name and pval < 5e-8:  # genome-wide significance
+                key = name.lower()
+                if key not in trait_pvals or pval < trait_pvals[key]:
+                    trait_pvals[key] = pval
+
+        # Extract gene names from strongest risk allele -> gene mappings
+        for locus in assoc.get("loci", []):
+            for gene_entry in locus.get("authorReportedGenes", []):
+                gene = gene_entry.get("geneName", "").strip()
+                if gene and gene not in seen_genes and gene not in ("intergenic", "NR"):
+                    seen_genes.add(gene)
+                    genes.append(gene)
+
+    if not trait_pvals:
         raise ValueError(
-            f"gwas-lookup skill not found at {_GWAS_SCRIPT}. "
-            "Install it or use --gene/--query instead."
+            f"No genome-wide significant associations found for {rsid}. "
+            "Try --gene or --query instead."
         )
 
-    with tempfile.TemporaryDirectory(prefix="ctf_gwas_") as tmp:
-        tmp_dir = Path(tmp)
-        # gwas-lookup mixes relative and absolute imports; run it from its
-        # own directory with that directory on PYTHONPATH so both work.
-        import os
+    # Prioritise disease traits over measurement/biomarker traits for trial relevance.
+    # "measurement" and "level" traits rarely match CT.gov condition searches.
+    _MEASUREMENT_WORDS = {"measurement", "level", "amount", "ratio", "concentration"}
 
-        gwas_dir = str(_GWAS_SCRIPT.parent)
-        env = {**os.environ, "PYTHONPATH": gwas_dir}
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(_GWAS_SCRIPT),
-                "--rsid",
-                rsid,
-                "--no-figures",
-                "--output",
-                str(tmp_dir),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=90,
-            cwd=gwas_dir,
-            env=env,
-        )
+    def _is_measurement(trait: str) -> bool:
+        return any(w in trait for w in _MEASUREMENT_WORDS)
 
-        # clawbio.py wraps the skill; check for result.json regardless of exit code
-        result_path = tmp_dir / "result.json"
-        if not result_path.exists():
-            stderr = result.stderr.strip().split("\n")[-1] if result.stderr else "unknown error"
-            raise ValueError(f"gwas-lookup failed for {rsid}: {stderr}")
+    sorted_traits = sorted(
+        trait_pvals.items(),
+        key=lambda x: (_is_measurement(x[0]), x[1]),  # diseases first, then by p-value
+    )
+    traits = [name.title() for name, _ in sorted_traits[:max_traits]]
 
-        data = json.loads(result_path.read_text())
-
-    merged = data.get("data", {}).get("merged", {})
-    return _extract_traits_and_genes(rsid, merged, max_traits)
+    return {"rsid": rsid, "traits": traits, "genes": genes}
 
 
 def _extract_traits_and_genes(
     rsid: str, merged: dict, max_traits: int
 ) -> dict:
-    """Extract unique, genome-wide significant traits and eQTL genes.
-
-    Traits are deduplicated case-insensitively and ranked by p-value.
-    Only genome-wide significant associations (p < 5e-8) are included.
-    """
-    # Collect traits from GWAS associations (most authoritative)
+    """Extract traits and genes from gwas-lookup's merged results format."""
     trait_pvals: dict[str, float] = {}
+
     for assoc in merged.get("gwas_associations", []):
         trait = assoc.get("trait", "").strip()
         pval = assoc.get("pval", 1.0)
-        if trait and pval < 5e-8:  # genome-wide significance threshold
+        if trait and pval < 5e-8:
             key = trait.lower()
             if key not in trait_pvals or pval < trait_pvals[key]:
                 trait_pvals[key] = pval
 
-    # Also check PheWAS for additional disease names
     for source_hits in merged.get("phewas", {}).values():
         for hit in source_hits:
             trait = hit.get("phenostring", "").strip()
@@ -94,11 +141,9 @@ def _extract_traits_and_genes(
                 if key not in trait_pvals or pval < trait_pvals[key]:
                     trait_pvals[key] = pval
 
-    # Sort by p-value (most significant first), take top N
     sorted_traits = sorted(trait_pvals.items(), key=lambda x: x[1])
     traits = [k.title() for k, _ in sorted_traits[:max_traits]]
 
-    # Extract gene symbols from eQTL associations
     genes: list[str] = []
     seen_genes: set[str] = set()
     for eqtl in merged.get("eqtl_associations", []):
@@ -108,9 +153,6 @@ def _extract_traits_and_genes(
             genes.append(gene)
 
     if not traits and not genes:
-        raise ValueError(
-            f"No genome-wide significant associations found for {rsid}. "
-            "Try --gene or --query instead."
-        )
+        raise ValueError(f"No significant associations for {rsid}")
 
     return {"rsid": rsid, "traits": traits, "genes": genes}
