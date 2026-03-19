@@ -1,7 +1,7 @@
 ---
 name: clinical-trial-finder
 version: 0.1.0
-author: Duvet05 <galvezcortezgonzalo@gmail.com>
+author: Duvet05 <gonzalo.galvezc@pucp.edu.pe>
 domain: clinical
 description: Find active clinical trials for a gene, condition, or drug from ClinicalTrials.gov API v2
 license: MIT
@@ -16,6 +16,16 @@ inputs:
     type: string
     format: []
     description: Direct search query string (alternative to input_file)
+    required: false
+  - name: gene
+    type: string
+    format: []
+    description: Gene symbol (e.g. BRCA1) — enriched via OpenTargets gene-to-disease mapping
+    required: false
+  - name: demo
+    type: flag
+    format: []
+    description: Run with built-in demo data (BRCA1 breast cancer)
     required: false
 
 outputs:
@@ -43,6 +53,14 @@ outputs:
     type: file
     format: txt
     description: SHA-256 digests of all generated outputs (checksums.sha256)
+  - name: html_report
+    type: file
+    format: html
+    description: Self-contained HTML report with coloured trial status cards (report.html)
+  - name: csv_table
+    type: file
+    format: csv
+    description: Trial data as CSV for import into Excel, R, or pandas (tables/trials.csv)
 
 dependencies:
   python: ">=3.11"
@@ -75,7 +93,10 @@ demo_data:
     description: Synthetic query for BRCA1 breast cancer trials — exercises recruiting and completed status paths
 
 endpoints:
-  cli: python skills/clinical-trial-finder/clinical_trial_finder.py --input {input_file} --output {output_dir}
+  cli: python skills/clinical-trial-finder/clinical_trial_finder.py --gene {gene} --output {output_dir}
+  cli_query: python skills/clinical-trial-finder/clinical_trial_finder.py --query "{query}" --output {output_dir}
+  cli_file: python skills/clinical-trial-finder/clinical_trial_finder.py --input {input_file} --output {output_dir}
+  cli_demo: python skills/clinical-trial-finder/clinical_trial_finder.py --demo --output {output_dir}
 ---
 
 ## Domain Decisions
@@ -105,6 +126,20 @@ endpoints:
 - **Status filter** (`--status`): Optional post-fetch filter to a single recruitment status (e.g. `RECRUITING`). Applied client-side after the API call so the chart and summary always reflect unfiltered counts first — filtered output is a view, not a re-query.
 - **Reproducibility outputs**: Every run writes `commands.sh` (exact CLI to reproduce) and `checksums.sha256` (SHA-256 of all outputs). This ensures results are auditable and re-runnable without ambiguity.
 - **Eligibility criteria**: Not parsed. The API returns eligibility as unstructured free text. Automated parsing would require NLP and introduces a high error rate for clinical use — users must review the full trial record on ClinicalTrials.gov before making any enrollment decisions.
+
+- **Retry with exponential backoff**: Transient failures (HTTP 429, 5xx, network timeouts) are retried up to 3 times with exponential backoff (1s, 2s, 4s). Non-retryable errors (4xx except 429) raise immediately. This follows the retry pattern recommended by CT.gov API documentation for rate-limited endpoints.
+
+- **Multi-page pagination**: CT.gov API v2 caps `pageSize` at 1000. For queries requesting more, the skill paginates via `nextPageToken` and accumulates results until `max_results` is reached. This ensures correct behaviour for large result sets without hitting API limits.
+
+- **Country filter** (`--country`): Uses CT.gov `query.locn` parameter to restrict results to trials in a specific country. Accepts ISO 3166-1 country names or codes. Applied at the API level (not post-fetch) to reduce bandwidth and improve relevance.
+
+- **EU Clinical Trials Register** (`--euctr`): Secondary European source queried as a best-effort complement. The EUCTR API returns XML with no versioning guarantees and may be unavailable. Results are normalised to the same schema as CT.gov trials and merged with deduplication. All EUCTR failures degrade gracefully to an empty list — the skill never fails due to EUCTR unavailability.
+
+- **HTML report**: Self-contained HTML with inline CSS, no external dependencies. Trial cards are colour-coded by recruitment status. Opens correctly from any file manager or browser without a web server.
+
+- **CSV output**: Always generated at `tables/trials.csv`. List fields (conditions, interventions) are pipe-delimited to survive CSV parsing. Designed for direct import into Excel, R, or pandas.
+
+- **FHIR inline validation**: When `--fhir` is used, the generated Bundle is validated against basic structural rules: required fields, status/phase value set membership, entry count consistency. This catches authoring errors before an external validator (e.g., HAPI) is needed.
 
 ## Safety Rules
 

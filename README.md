@@ -136,6 +136,7 @@ report/
 | [Galaxy Bridge](skills/galaxy-bridge/) | **MVP** | Search, run, and chain 8,000+ Galaxy bioinformatics tools |
 | [RNA-seq DE](skills/rnaseq-de/) | **MVP** | Bulk/pseudo-bulk differential expression with QC + PCA + contrasts |
 | [scRNA Embedding](skills/scrna-embedding/) | **MVP** | scVI latent embedding, batch integration, and stable `integrated.h5ad` export for downstream latent analysis |
+| [Clinical Trial Finder](skills/clinical-trial-finder/) | **MVP** | ClinicalTrials.gov API v2 + OpenTargets gene enrichment + FHIR R4 Bundle output |
 | [VCF Annotator](skills/vcf-annotator/) | Planned | Variant annotation with VEP, ClinVar, gnomAD |
 | [Lit Synthesizer](skills/lit-synthesizer/) | Planned | PubMed/bioRxiv search with LLM summarisation and citation graphs |
 | [scRNA Orchestrator](skills/scrna-orchestrator/) | **MVP** | Scanpy automation: QC, optional doublet detection, clustering, markers, annotation, latent downstream mode, contrastive markers |
@@ -229,6 +230,27 @@ python ancestry_pca.py --demo --output ancestry_report
 
 **Demo result**: 736 Peruvian samples across 28 indigenous populations. Amazonian groups (Matzes, Awajun, Candoshi) sit in genetic space that no SGDP population occupies — genuinely underrepresented, not just in GWAS, but in the reference panels themselves.
 
+### Clinical Trial Finder — *Clinical Scale*
+
+Searches ClinicalTrials.gov (>500,000 studies) and the EU Clinical Trials Register by condition, drug, or gene symbol. Outputs seven file types including FHIR R4-compliant trial records, HTML report, CSV, and a phase distribution chart.
+
+- **Three search modes**: free-text query (`--query "EGFR lung cancer"`), gene symbol (`--gene BRCA1` → OpenTargets → diseases → trials), or demo (`--demo`)
+- **OpenTargets enrichment**: resolves a gene to its top-5 associated diseases (score ≥ 0.6), queries each disease separately, and deduplicates by NCT ID
+- **FHIR R4 Bundle** (`--fhir`): MeSH-coded conditions, inline validation against R4 value sets — interoperable with Epic/Cerner
+- **Multi-source**: `--euctr` merges results from the EU Clinical Trials Register with CT.gov, deduplicating by trial ID
+- **Country filter**: `--country Spain` restricts results via CT.gov `query.locn`
+- **Resilient networking**: multi-page pagination (`nextPageToken`), exponential backoff retry (3 attempts) on transient failures
+- **Reproducibility bundle**: `commands.sh`, `checksums.sha256`, `figures/phase_distribution.png`, `tables/trials.csv`, `report.html`
+- Zero external dependencies (stdlib only). 133 tests (111 unit + 22 e2e). Integrates with `profile-report` — PRS elevated risk → gene → trials in a unified genomic report.
+
+```bash
+python skills/clinical-trial-finder/clinical_trial_finder.py --demo --fhir --output report
+python skills/clinical-trial-finder/clinical_trial_finder.py --gene BRCA1 --fhir --output report
+python skills/clinical-trial-finder/clinical_trial_finder.py --query "lung cancer" --country Spain --euctr --output report
+```
+
+**Demo result** (BRCA1): 20 breast cancer trials — recruiting, active, completed, and terminated — with MeSH-coded conditions, inline FHIR validation (PASS), HTML report with coloured status cards, CSV table, and phase distribution chart.
+
 ### Semantic Similarity Index — *Systemic Scale*
 
 Computes a Semantic Isolation Index for diseases using 13.1M PubMed abstracts and PubMedBERT embeddings (768-dim):
@@ -290,6 +312,7 @@ python clawbio.py run ukb-navigator --demo       # UK Biobank schema search (5s)
 python clawbio.py run profile --demo             # Unified genomic profile (30s)
 python clawbio.py run galaxy --demo              # Galaxy Bridge FastQC demo (offline)
 python clawbio.py run rnaseq --demo              # RNA-seq DE demo (bulk/pseudo-bulk)
+python clawbio.py run trials --demo              # Clinical trial finder — BRCA1 breast cancer (5s)
 ```
 
 ### Run with your own data
