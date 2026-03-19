@@ -460,7 +460,9 @@ def write_html(
         )
         phase_label = _html.escape(t["phase"] or "N/A")
         cards.append(f"""
-        <div class="trial-card" data-status="{_esc(t['status'])}" data-phase="{phase_label}"
+        <div class="trial-card" data-status="{_esc(t["status"])}" data-phase="{
+            phase_label
+        }"
              style="border-left:4px solid {color};padding:12px 16px;margin:8px 0;
                     background:#fafafa;border-radius:0 4px 4px 0">
           <div style="font-weight:bold">

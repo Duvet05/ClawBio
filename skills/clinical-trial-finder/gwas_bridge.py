@@ -118,9 +118,7 @@ def _query_gwas_catalog(rsid: str, max_traits: int) -> dict:
     return {"rsid": rsid, "traits": traits, "genes": genes}
 
 
-def _extract_traits_and_genes(
-    rsid: str, merged: dict, max_traits: int
-) -> dict:
+def _extract_traits_and_genes(rsid: str, merged: dict, max_traits: int) -> dict:
     """Extract traits and genes from gwas-lookup's merged results format."""
     trait_pvals: dict[str, float] = {}
 

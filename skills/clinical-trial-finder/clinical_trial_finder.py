@@ -201,9 +201,7 @@ def main() -> None:
         trials = []
         for trait in traits:
             print(f"  Querying trials for: {trait!r}")
-            for t in fetch_trials(
-                trait, max_results=per_trait, country=args.country
-            ):
+            for t in fetch_trials(trait, max_results=per_trait, country=args.country):
                 if t["nct_id"] not in seen:
                     seen.add(t["nct_id"])
                     trials.append(t)
@@ -211,7 +209,9 @@ def main() -> None:
         query_info = {"query": rsid, "terms": traits}
         gene_context = {
             "symbol": rsid,
-            "name": f"GWAS variant ({', '.join(genes[:3])})" if genes else "GWAS variant",
+            "name": f"GWAS variant ({', '.join(genes[:3])})"
+            if genes
+            else "GWAS variant",
             "diseases": traits,
             "min_score": 0.0,
         }

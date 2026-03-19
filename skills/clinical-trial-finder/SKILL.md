@@ -3,7 +3,7 @@ name: clinical-trial-finder
 version: 0.1.0
 author: Duvet05 <gonzalo.galvezc@pucp.edu.pe>
 domain: clinical
-description: Find active clinical trials for a gene, condition, or drug from ClinicalTrials.gov API v2
+description: Find clinical trials for a gene, variant, or condition from ClinicalTrials.gov + EUCTR, with FHIR R4 output
 license: MIT
 
 inputs:
@@ -21,6 +21,11 @@ inputs:
     type: string
     format: []
     description: Gene symbol (e.g. BRCA1) — enriched via OpenTargets gene-to-disease mapping
+    required: false
+  - name: rsid
+    type: string
+    format: []
+    description: dbSNP rsID (e.g. rs3798220) — resolved via GWAS Catalog to disease traits, then queried against CT.gov
     required: false
   - name: demo
     type: flag
@@ -56,7 +61,7 @@ outputs:
   - name: html_report
     type: file
     format: html
-    description: Self-contained HTML report with coloured trial status cards (report.html)
+    description: Interactive HTML report with JS filters (status, phase, text search) and coloured trial cards (report.html)
   - name: csv_table
     type: file
     format: csv
@@ -87,13 +92,17 @@ metadata:
       - ResearchStudy
       - NCT
       - ClinicalTrials.gov
+      - GWAS
+      - rsID
+      - variant
 
 demo_data:
   - path: demo_input.txt
     description: Synthetic query for BRCA1 breast cancer trials — exercises recruiting and completed status paths
 
 endpoints:
-  cli: python skills/clinical-trial-finder/clinical_trial_finder.py --gene {gene} --output {output_dir}
+  cli_gene: python skills/clinical-trial-finder/clinical_trial_finder.py --gene {gene} --output {output_dir}
+  cli_rsid: python skills/clinical-trial-finder/clinical_trial_finder.py --rsid {rsid} --output {output_dir}
   cli_query: python skills/clinical-trial-finder/clinical_trial_finder.py --query "{query}" --output {output_dir}
   cli_file: python skills/clinical-trial-finder/clinical_trial_finder.py --input {input_file} --output {output_dir}
   cli_demo: python skills/clinical-trial-finder/clinical_trial_finder.py --demo --output {output_dir}
@@ -135,7 +144,9 @@ endpoints:
 
 - **EU Clinical Trials Register** (`--euctr`): Secondary European source queried as a best-effort complement. The EUCTR API returns XML with no versioning guarantees and may be unavailable. Results are normalised to the same schema as CT.gov trials and merged with deduplication. All EUCTR failures degrade gracefully to an empty list — the skill never fails due to EUCTR unavailability.
 
-- **HTML report**: Self-contained HTML with inline CSS, no external dependencies. Trial cards are colour-coded by recruitment status. Opens correctly from any file manager or browser without a web server.
+- **Variant-to-trial pipeline** (`--rsid`): Queries the EBI GWAS Catalog REST API (`/singleNucleotidePolymorphisms/{rsid}/associations?projection=associationBySnp`) to resolve a dbSNP rsID to genome-wide significant disease traits (p < 5 x 10^-8), then searches CT.gov for each trait. Disease traits are ranked above biomarker measurements to maximise trial relevance. Gene symbols are extracted from `authorReportedGenes` in the association loci. Reference: Buniello et al., *Nucleic Acids Research* 2019; 47:D1005--D1012 (GWAS Catalog).
+
+- **HTML report**: Self-contained HTML with inline CSS and JavaScript, no external dependencies. Trial cards are colour-coded by recruitment status. Interactive client-side filters (status, phase, free-text search) with a live counter allow users to narrow results without re-querying. Opens correctly from any file manager or browser without a web server.
 
 - **CSV output**: Always generated at `tables/trials.csv`. List fields (conditions, interventions) are pipe-delimited to survive CSV parsing. Designed for direct import into Excel, R, or pandas.
 
