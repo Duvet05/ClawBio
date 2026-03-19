@@ -62,7 +62,6 @@ VALID_STATUSES = {
     "temporarily-closed-to-accrual",
     "temporarily-closed-to-accrual-and-intervention",
     "withdrawn",
-    "unknown",
 }
 
 # Valid ResearchStudy.phase codes (FHIR R4)

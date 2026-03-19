@@ -6,6 +6,12 @@
 #
 # Usage:  bash skills/clinical-trial-finder/demo.sh
 # From:   ClawBio repo root
+#
+# Windows: This script requires bash (Git Bash or WSL).
+#          Alternatively, run the Python commands directly:
+#            python3 skills/clinical-trial-finder/clinical_trial_finder.py --demo --fhir --output out/demo
+#            python3 skills/clinical-trial-finder/clinical_trial_finder.py --gene TP53 --fhir --output out/gene
+#            python3 skills/clinical-trial-finder/clinical_trial_finder.py --rsid rs3798220 --fhir --output out/rsid
 
 set -euo pipefail
 

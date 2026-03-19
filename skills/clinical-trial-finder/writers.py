@@ -221,7 +221,7 @@ def _trial_to_fhir(t: dict) -> dict:
             }
         ],
         "title": t["title"],
-        "status": FHIR_STATUS.get(t["status"], "unknown"),
+        "status": FHIR_STATUS.get(t["status"], "in-review"),
         "phase": {
             "coding": [
                 {

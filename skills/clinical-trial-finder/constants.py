@@ -108,7 +108,9 @@ FHIR_STATUS: dict[str, str] = {
     "WITHDRAWN": "withdrawn",
     "SUSPENDED": "temporarily-closed-to-accrual",
     "APPROVED_FOR_MARKETING": "completed",
-    "UNKNOWN": "unknown",
+    # FHIR R4 schema does not include "unknown" -- map to "in-review" as the
+    # closest semantically neutral status for trials CT.gov can't confirm.
+    "UNKNOWN": "in-review",
 }
 
 # Maps CT.gov phase strings to FHIR R4 research-study-phase codes.
@@ -230,7 +232,6 @@ FHIR_VALID_STATUSES = {
     "temporarily-closed-to-accrual",
     "temporarily-closed-to-accrual-and-intervention",
     "withdrawn",
-    "unknown",
 }
 
 FHIR_VALID_PHASES = {
